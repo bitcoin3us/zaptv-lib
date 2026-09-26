@@ -77,7 +77,114 @@ def no_scroll_chain(obj):
             return
 
 
-class FieldPickerActivity(Activity):
+class DragReorder:
+    """Drag-to-reorder for a column of fixed-height rows.
+
+    Mix into an Activity that lays its rows out at y = index * ROW_H
+    inside a container with scroll chaining off, keeps them in
+    `self._rows`, and returns the list they stand for from
+    _reorder_target(). Call _bind_drag(row, index) on each row. A drop
+    that changed the order moves the item in that list and calls
+    _after_reorder() (by default self._render()); a drop that didn't just
+    snaps the rows back, so a plain tap still reaches the row's own click
+    handler. LVGL also sends CLICKED on the release that ends a drag, so a
+    row with a click handler should start it with
+    `if self.drag_consumed(): return`. _nudge_index(i) moves row i one
+    place down, wrapping to the top, for keypads without a touchscreen."""
+
+    ROW_H = 30
+    _drag_idx = None
+    _drag_target = 0
+    _drag_y0 = 0
+    _dragged = False
+
+    def _reorder_target(self):
+        raise NotImplementedError
+
+    def _after_reorder(self):
+        self._render()
+
+    def drag_consumed(self):
+        was = self._dragged
+        self._dragged = False
+        return was
+
+    def _bind_drag(self, row, index):
+        row.add_event_cb(lambda e, i=index: self._drag_start(i),
+                         lv.EVENT.PRESSED, None)
+        row.add_event_cb(lambda e: self._drag_move(), lv.EVENT.PRESSING, None)
+        row.add_event_cb(lambda e: self._drag_end(), lv.EVENT.RELEASED, None)
+        # Without this a drag that slips off the row leaves the list
+        # stuck mid-reorder.
+        row.add_event_cb(lambda e: self._drag_end(), lv.EVENT.PRESS_LOST, None)
+
+    def _nudge_index(self, i):
+        items = self._reorder_target()
+        if i < 0 or i >= len(items) or len(items) < 2:
+            return
+        item = items.pop(i)
+        items.insert((i + 1) % (len(items) + 1), item)
+        self._after_reorder()
+
+    def _pointer_y(self):
+        indev = lv.indev_active()
+        if indev is None:
+            return None
+        point = lv.point_t()
+        indev.get_point(point)
+        return point.y
+
+    def _drag_start(self, index):
+        y = self._pointer_y()
+        if y is None or index >= len(self._rows):
+            return
+        self._drag_idx = index
+        self._drag_target = index
+        self._drag_y0 = y
+        self._rows[index].move_foreground()
+
+    def _drag_move(self):
+        if self._drag_idx is None:
+            return
+        y = self._pointer_y()
+        if y is None:
+            return
+        offset = y - self._drag_y0
+        self._rows[self._drag_idx].set_y(self._drag_idx * self.ROW_H + offset)
+        target = self._drag_idx + int(round(offset / float(self.ROW_H)))
+        target = max(0, min(len(self._rows) - 1, target))
+        if target != self._drag_target:
+            self._drag_target = target
+            self._open_slot()
+
+    def _open_slot(self):
+        """Lay the untouched rows out around an empty slot at the target,
+        so the gap shows where the item will land."""
+        slot = 0
+        for i, row in enumerate(self._rows):
+            if i == self._drag_idx:
+                continue
+            if slot == self._drag_target:
+                slot += 1
+            row.set_y(slot * self.ROW_H)
+            slot += 1
+
+    def _drag_end(self):
+        if self._drag_idx is None:
+            return
+        source, target = self._drag_idx, self._drag_target
+        self._drag_idx = None
+        if target != source:
+            items = self._reorder_target()
+            items.insert(target, items.pop(source))
+            self._dragged = True
+            self._after_reorder()
+        else:
+            for i, row in enumerate(self._rows):
+                row.set_y(i * self.ROW_H)
+
+
+class FieldPickerActivity(DragReorder, Activity):
     """Which fields appear on one screen, and in what order."""
 
     CATEGORIES = ()
@@ -93,6 +200,9 @@ class FieldPickerActivity(Activity):
 
     def save_screens(self, prefs, screens):
         raise NotImplementedError
+
+    def _reorder_target(self):
+        return self._selected
 
     def extra_buttons(self, row):
         """Add app-specific buttons between Cancel and Save."""
@@ -113,9 +223,6 @@ class FieldPickerActivity(Activity):
         self._is_new = False
         self._loaded = False
         self._rows = []
-        self._drag_idx = None
-        self._drag_target = 0
-        self._drag_y0 = 0
         screen = lv.obj()
         screen.set_style_pad_all(DisplayMetrics.pct_of_width(2), lv.PART.MAIN)
         screen.set_flex_flow(lv.FLEX_FLOW.COLUMN)
@@ -297,16 +404,7 @@ class FieldPickerActivity(Activity):
             cross.set_style_text_color(ink, lv.PART.MAIN)
             cross.center()
 
-            row.add_event_cb(lambda e, i=i: self._drag_start(i),
-                             lv.EVENT.PRESSED, None)
-            row.add_event_cb(lambda e: self._drag_move(),
-                             lv.EVENT.PRESSING, None)
-            row.add_event_cb(lambda e: self._drag_end(),
-                             lv.EVENT.RELEASED, None)
-            # Without this a drag that slips off the row leaves the list
-            # stuck mid-reorder.
-            row.add_event_cb(lambda e: self._drag_end(),
-                             lv.EVENT.PRESS_LOST, None)
+            self._bind_drag(row, i)
             self._rows.append(row)
 
         if n > 1:
@@ -338,66 +436,9 @@ class FieldPickerActivity(Activity):
 
         Repeated presses walk it to any position, so the whole ordering is
         reachable from a keypad without a drag."""
-        if field_id not in self._selected or len(self._selected) < 2:
+        if field_id not in self._selected:
             return
-        i = self._selected.index(field_id)
-        self._selected.pop(i)
-        self._selected.insert((i + 1) % (len(self._selected) + 1), field_id)
-        self._render()
-
-    # --- drag to reorder ---
-
-    def _pointer_y(self):
-        indev = lv.indev_active()
-        if indev is None:
-            return None
-        point = lv.point_t()
-        indev.get_point(point)
-        return point.y
-
-    def _drag_start(self, index):
-        y = self._pointer_y()
-        if y is None or index >= len(self._rows):
-            return
-        self._drag_idx = index
-        self._drag_target = index
-        self._drag_y0 = y
-        self._rows[index].move_foreground()
-
-    def _drag_move(self):
-        if self._drag_idx is None:
-            return
-        y = self._pointer_y()
-        if y is None:
-            return
-        offset = y - self._drag_y0
-        self._rows[self._drag_idx].set_y(self._drag_idx * self.ROW_H + offset)
-        target = self._drag_idx + int(round(offset / float(self.ROW_H)))
-        target = max(0, min(len(self._rows) - 1, target))
-        if target != self._drag_target:
-            self._drag_target = target
-            self._open_slot()
-
-    def _open_slot(self):
-        """Lay the untouched rows out around an empty slot at the target,
-        so the gap shows where the field will land."""
-        slot = 0
-        for i, row in enumerate(self._rows):
-            if i == self._drag_idx:
-                continue
-            if slot == self._drag_target:
-                slot += 1
-            row.set_y(slot * self.ROW_H)
-            slot += 1
-
-    def _drag_end(self):
-        if self._drag_idx is None:
-            return
-        source, target = self._drag_idx, self._drag_target
-        self._drag_idx = None
-        if target != source:
-            self._selected.insert(target, self._selected.pop(source))
-        self._render()          # renumbers and snaps everything back
+        self._nudge_index(self._selected.index(field_id))
 
     # --- persistence ---
 
