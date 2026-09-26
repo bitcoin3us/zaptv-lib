@@ -81,6 +81,15 @@ def configure_point_cap(width_px):
         RANGE_SPECS[label] = (hours, min(hours, cap))
 
 
+def expected_points(label):
+    """How many points a full fetch of `label` yields at the current cap:
+    one per stride-wide time bucket, the same arithmetic the collector
+    uses. Lets an app spot a cached series recorded at a lower cap."""
+    hours, cap = RANGE_SPECS.get(label, RANGE_SPECS[DEFAULT_RANGE])
+    stride = max(1, (hours + cap - 1) // cap)
+    return (hours + stride - 1) // stride
+
+
 # How often each range is worth re-fetching in full, given what it costs
 # to reach. The underlying data is hourly, so refetching faster than that
 # buys nothing — and the long ranges are kept current between full
