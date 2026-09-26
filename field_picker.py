@@ -22,6 +22,11 @@ Subclass FieldPickerActivity and supply the app's own field registry:
     def load_screens(self, prefs):           -> [[field_id, ...], ...]
     def save_screens(self, prefs, screens):  persist that list
 
+A screen entry may also be a dict {"fields": [...], ...}: any other keys
+(a layout name, say) ride along untouched in `self._extra`, which the
+app may edit before Save. `extra_buttons(row)` lets the app add its own
+buttons to the Cancel/Save row.
+
 Launch it with Intent extras `prefs` (the app's SharedPreferences) and
 `index` (which screen to edit; an index past the end means "new screen").
 """
@@ -89,6 +94,13 @@ class FieldPickerActivity(Activity):
     def save_screens(self, prefs, screens):
         raise NotImplementedError
 
+    def extra_buttons(self, row):
+        """Add app-specific buttons between Cancel and Save."""
+
+    @staticmethod
+    def _entry_fields(entry):
+        return list(entry.get("fields") or []) if isinstance(entry, dict) else list(entry)
+
     # --- lifecycle ---
 
     def onCreate(self):
@@ -96,6 +108,8 @@ class FieldPickerActivity(Activity):
         self.prefs = extras.get("prefs")
         self.index = extras.get("index", 0)
         self._selected = []
+        self._extra = {}
+        self._dict_entries = False
         self._is_new = False
         self._loaded = False
         self._rows = []
@@ -117,8 +131,14 @@ class FieldPickerActivity(Activity):
             # edits made before switching modes.
             screens = self.load_screens(self.prefs)
             self._is_new = self.index >= len(screens)
-            self._selected = ([self._default_field()] if self._is_new
-                              else list(screens[self.index]))
+            self._dict_entries = bool(screens) and isinstance(screens[0], dict)
+            if self._is_new:
+                self._selected = [self._default_field()]
+            else:
+                entry = screens[self.index]
+                self._selected = self._entry_fields(entry)
+                if isinstance(entry, dict):
+                    self._extra = {k: v for k, v in entry.items() if k != "fields"}
             self._loaded = True
         self._render()
 
@@ -161,6 +181,7 @@ class FieldPickerActivity(Activity):
 
         actions = button_row(screen)
         row_button(actions, lv.SYMBOL.CLOSE + "  Cancel", self.finish, grow=1)
+        self.extra_buttons(actions)
         row_button(actions, lv.SYMBOL.OK + "  Save", self._save, grow=2)
 
         if not self._is_new and len(self.load_screens(self.prefs)) > 1:
@@ -380,12 +401,19 @@ class FieldPickerActivity(Activity):
 
     # --- persistence ---
 
+    def _entry(self):
+        if self._extra or self._dict_entries:
+            entry = dict(self._extra)
+            entry["fields"] = list(self._selected)
+            return entry
+        return list(self._selected)
+
     def _save(self, event=None):
         screens = self.load_screens(self.prefs)
         if self._is_new:
-            screens.append(list(self._selected))
+            screens.append(self._entry())
         elif self.index < len(screens):
-            screens[self.index] = list(self._selected)
+            screens[self.index] = self._entry()
         self.save_screens(self.prefs, screens)
         self.finish()
 
