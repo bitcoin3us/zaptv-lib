@@ -46,12 +46,15 @@ def feed_currency(currency):
 # 276 KB for a year. So one pass fills every range at once — the short
 # ranges are just prefixes of the long ones — and the point caps keep
 # each series small enough to plot and cache.
-# Point caps sized to the display: a full-screen chart is 302 px wide, so
-# ~300 points is one per pixel column — more would be invisible. The cap
-# costs no bandwidth (the same feed pass is read either way; the cap only
-# decides how many parsed entries are kept), so 30d and 1y were raised
-# from 180 to 300 for free. 24h and 7d list every hourly sample there is:
-# the upstream feed is the limit, not the cap.
+# Point caps sized to the display: one point per pixel column is all a
+# chart can show, so the caps below are the 2" board's ~300 columns and
+# configure_point_cap() raises them to the width of whatever display the
+# app is running on. The cap costs no bandwidth (the same feed pass is
+# read either way; it only decides how many parsed entries are kept), only
+# cache space. 24h and 7d list every hourly sample there is: the upstream
+# feed is the limit, not the cap, and 30d reaches that too on any display
+# wider than 720 px.
+DEFAULT_POINT_CAP = 300
 RANGE_SPECS = {
     "24h": (24, 24),
     "7d": (168, 168),
@@ -62,6 +65,22 @@ RANGE_SPECS = {
     # the same one-per-pixel ceiling as the other ranges.
     "4y": (35064, 300),
 }
+
+
+def configure_point_cap(width_px):
+    """Size the long-range caps to a display `width_px` pixels wide.
+
+    Call once at startup, before any fetch. A range never keeps more
+    points than it has hours (the feed is hourly), and never fewer than
+    the default, so a narrow display is unaffected."""
+    try:
+        cap = max(DEFAULT_POINT_CAP, int(width_px))
+    except (TypeError, ValueError):
+        return
+    for label, (hours, _old) in list(RANGE_SPECS.items()):
+        RANGE_SPECS[label] = (hours, min(hours, cap))
+
+
 # How often each range is worth re-fetching in full, given what it costs
 # to reach. The underlying data is hourly, so refetching faster than that
 # buys nothing — and the long ranges are kept current between full
