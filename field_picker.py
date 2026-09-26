@@ -209,6 +209,10 @@ class FieldPickerActivity(Activity):
         sliding one reorders instead of scrolling the page behind it — the
         reason this can share a screen with the full field list at all."""
         self._section(screen, "Selected")
+        # The grip and the cross sit on transparent buttons, and LVGL's
+        # default button text is white: right on a dark theme, invisible
+        # on a light one. Use the colour the screen paints its own text.
+        ink = screen.get_style_text_color(lv.PART.MAIN)
         n = len(self._selected)
         cont = lv.obj(screen)
         cont.set_width(lv.pct(100))
@@ -252,6 +256,7 @@ class FieldPickerActivity(Activity):
             grip_icon = lv.label(grip)
             grip_icon.set_text(lv.SYMBOL.LIST)
             grip_icon.set_style_text_font(FontManager.getFont(size=14), lv.PART.MAIN)
+            grip_icon.set_style_text_color(ink, lv.PART.MAIN)
             grip_icon.set_style_text_opa(lv.OPA._50, lv.PART.MAIN)
             grip_icon.center()
 
@@ -267,7 +272,8 @@ class FieldPickerActivity(Activity):
             add_focus_border(drop)
             cross = lv.label(drop)
             cross.set_text(lv.SYMBOL.CLOSE)
-            cross.set_style_text_font(FontManager.getFont(size=12), lv.PART.MAIN)
+            cross.set_style_text_font(FontManager.getFont(size=14), lv.PART.MAIN)
+            cross.set_style_text_color(ink, lv.PART.MAIN)
             cross.center()
 
             row.add_event_cb(lambda e, i=i: self._drag_start(i),
