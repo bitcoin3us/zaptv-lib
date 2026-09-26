@@ -355,8 +355,13 @@ class FieldPickerActivity(DragReorder, Activity):
         # on a light one. Use the colour the screen paints its own text.
         ink = screen.get_style_text_color(lv.PART.MAIN)
         n = len(self._selected)
+        # A lane of plain page down the right-hand side, outside the
+        # container: rows swallow every touch as a drag, so when the list
+        # fills the page this strip is what is left to scroll it with.
+        lane = 44
+        cont_w = DisplayMetrics.width() - 2 * DisplayMetrics.pct_of_width(2) - lane
         cont = lv.obj(screen)
-        cont.set_width(lv.pct(100))
+        cont.set_width(cont_w)
         cont.set_height(self.ROW_H * n)
         cont.set_style_bg_opa(lv.OPA.TRANSP, lv.PART.MAIN)
         cont.set_style_border_width(0, lv.PART.MAIN)
@@ -423,7 +428,10 @@ class FieldPickerActivity(DragReorder, Activity):
         if n > 1:
             hint = lv.label(screen)
             hint.set_text("Drag to reorder or tap " + lv.SYMBOL.LIST
-                          + " to move down, " + lv.SYMBOL.CLOSE + " to remove.")
+                          + " to move down, " + lv.SYMBOL.CLOSE
+                          + " to remove. Swipe the strip on the right to scroll.")
+            hint.set_long_mode(lv.label.LONG_MODE.WRAP)
+            hint.set_width(lv.pct(100))
             hint.set_style_text_font(FontManager.getFont(size=12), lv.PART.MAIN)
             hint.set_style_text_opa(lv.OPA._50, lv.PART.MAIN)
 
