@@ -17,6 +17,8 @@ reused without licence friction.
 | `market_data.py` | mempool.space client: block height, spot price in twelve currencies (five derived from USD via ECB rates), fees, streaming price history with per-range thinning, all-time-high scan. |
 | `odometer.py` | Rolling-counter number display widget for LVGL. |
 | `field_picker.py` | `FieldPickerActivity`: categorised field picker with drag-to-reorder; the app supplies its field registry. |
+| `clankertv_core.py` | Pure normalisation of AI-provider usage into records of meters (percentage, reset countdown, level), plus parsers for Claude rate-limit headers, OpenRouter, DeepSeek, xAI and the ClankerTV bridge payload. Runs on CPython too. |
+| `clankertv_providers.py` | Async pollers for those providers over MPOS aiohttp; `build_sources(prefs)` reads the ClankerTV preference keys. |
 
 ## Using it in an app
 
