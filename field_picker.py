@@ -292,12 +292,25 @@ class FieldPickerActivity(DragReorder, Activity):
         row_button(actions, lv.SYMBOL.OK + "  Save", self._save, grow=2)
 
         if not self._is_new and len(self.load_screens(self.prefs)) > 1:
+            # Small and outlined: a destructive action that should be
+            # findable, not the biggest thing on the page.
             delete_btn = lv.button(screen)
-            delete_btn.set_width(lv.pct(100))
+            delete_btn.set_size(lv.SIZE_CONTENT, lv.SIZE_CONTENT)
+            delete_btn.set_style_pad_hor(10, lv.PART.MAIN)
+            delete_btn.set_style_pad_ver(5, lv.PART.MAIN)
+            delete_btn.set_style_margin_top(6, lv.PART.MAIN)
+            delete_btn.set_style_bg_opa(lv.OPA.TRANSP, lv.PART.MAIN)
+            delete_btn.set_style_shadow_width(0, lv.PART.MAIN)
+            delete_btn.set_style_border_width(1, lv.PART.MAIN)
+            ink = screen.get_style_text_color(lv.PART.MAIN)
+            delete_btn.set_style_border_color(ink, lv.PART.MAIN)
+            delete_btn.set_style_border_opa(lv.OPA._50, lv.PART.MAIN)
             delete_btn.add_event_cb(self._delete_screen, lv.EVENT.CLICKED, None)
             add_focus_border(delete_btn)
             delete_label = lv.label(delete_btn)
-            delete_label.set_text(lv.SYMBOL.TRASH + "  Delete Screen")
+            delete_label.set_text(lv.SYMBOL.TRASH + "  Delete screen")
+            delete_label.set_style_text_font(FontManager.getFont(size=12), lv.PART.MAIN)
+            delete_label.set_style_text_color(ink, lv.PART.MAIN)
             delete_label.center()
 
         screen.update_layout()
