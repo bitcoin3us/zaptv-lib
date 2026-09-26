@@ -578,10 +578,15 @@ class MarketData:
                 rec = await self._get_json("/api/v1/fees/recommended")
                 if isinstance(rec, dict):
                     high, low = rec.get("fastestFee"), rec.get("hourFee")
+                    mid = rec.get("halfHourFee")
                     if high is not None:
                         state["fee_high"] = float(high)
                     if low is not None:
                         state["fee_low"] = float(low)
+                    if mid is not None:
+                        # The middle tier of the same estimate, so the
+                        # three tiers shown together always order.
+                        state["fee_mid"] = float(mid)
                     if high is not None or low is not None:
                         stamps["fees"] = time.time()
                         updated = True
