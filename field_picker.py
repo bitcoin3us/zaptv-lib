@@ -396,10 +396,12 @@ class FieldPickerActivity(DragReorder, Activity):
             # A button, not just an ornament: tapping or ENTERing it moves
             # the field one place down (wrapping at the end), which is the
             # only way to reorder without a touchscreen to drag on. A drag
-            # started on the row body still works as before.
+            # started on the row body still works as before. It sits left
+            # of the cross with a clear gap, so a thumb aiming to reorder
+            # does not remove and vice versa.
             grip = lv.button(row)
             grip.set_size(26, self.ROW_H - 5)
-            grip.align(lv.ALIGN.RIGHT_MID, -2, 0)
+            grip.align(lv.ALIGN.RIGHT_MID, -42, 0)
             grip.set_style_bg_opa(lv.OPA.TRANSP, lv.PART.MAIN)
             grip.set_style_shadow_width(0, lv.PART.MAIN)
             grip.add_event_cb(lambda e, f=field_id: self._nudge(f),
@@ -414,9 +416,10 @@ class FieldPickerActivity(DragReorder, Activity):
 
             # Its own button, so pressing it never starts a drag: LVGL
             # delivers the press to the topmost object under the finger.
+            # Far right, where a remove control is expected.
             drop = lv.button(row)
             drop.set_size(28, self.ROW_H - 5)
-            drop.align(lv.ALIGN.RIGHT_MID, -30, 0)
+            drop.align(lv.ALIGN.RIGHT_MID, -2, 0)
             drop.set_style_bg_opa(lv.OPA.TRANSP, lv.PART.MAIN)
             drop.set_style_shadow_width(0, lv.PART.MAIN)
             drop.add_event_cb(lambda e, f=field_id: self._deselect(f),
