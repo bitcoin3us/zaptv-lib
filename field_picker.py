@@ -24,7 +24,8 @@ Subclass FieldPickerActivity and supply the app's own field registry:
 
 A screen entry may also be a dict {"fields": [...], ...}: any other keys
 (a layout name, say) ride along untouched in `self._extra`, which the
-app may edit before Save. `extra_buttons(row)` lets the app add its own
+app may edit before Save. `after_selected(screen)` lets the app add a
+section under the Selected list, and `extra_buttons(row)` its own
 buttons to the Cancel/Save row.
 
 Launch it with Intent extras `prefs` (the app's SharedPreferences) and
@@ -207,6 +208,10 @@ class FieldPickerActivity(DragReorder, Activity):
     def extra_buttons(self, row):
         """Add app-specific buttons between Cancel and Save."""
 
+    def after_selected(self, screen):
+        """Add an app-specific section between the Selected list and the
+        categories (BlockTV puts its layout strip here)."""
+
     @staticmethod
     def _entry_fields(entry):
         return list(entry.get("fields") or []) if isinstance(entry, dict) else list(entry)
@@ -278,6 +283,7 @@ class FieldPickerActivity(DragReorder, Activity):
         header.set_style_text_font(FontManager.getFont(size=18), lv.PART.MAIN)
 
         self._render_selected(screen)
+        self.after_selected(screen)
         for name, field_ids in self.CATEGORIES:
             available = [f for f in field_ids if f not in self._selected]
             if not available:
