@@ -397,7 +397,12 @@ def _usage_bucket_keys(obj):
     extra = sorted(k for k in obj if isinstance(k, str) and k.startswith("seven_day_")
                    and k not in known and isinstance(obj.get(k), dict))
     return [(k, label, w) for k, label, w in _CLAUDE_USAGE_BUCKETS] + [
-        (k, "Weekly " + k[len("seven_day_"):].replace("_", " ").title(), WINDOW_7D) for k in extra]
+        (k, "Weekly " + _title_words(k[len("seven_day_"):]), WINDOW_7D) for k in extra]
+
+
+def _title_words(snake):
+    # MicroPython's str has no title().
+    return " ".join(w[:1].upper() + w[1:] for w in snake.split("_") if w)
 
 
 def claude_from_usage_api(obj, now_epoch, pid="claude", name="Claude"):
