@@ -14,13 +14,16 @@
 #     surface as zap-style events (so a zap to the wallet's lightning
 #     address shows up even without an npub configured).
 #
-# NOTE: the NostrManager singleton is shared device-wide (whichever app's
-# copy of nostr_service.py imports first wins the sys.modules slot), and
-# set_nwc_callbacks() is global — running BlockTV's NWC integration at
-# the same time as another NWC app (e.g. Lightning Piggy) means the two
-# fight over callbacks. Last one to resume wins.
+# NOTE: NostrManager is a singleton per copy of nostr_service.py, and all
+# MicroPythonOS apps share one sys.modules. Apps vendor this module and
+# nostr_service.py under their own prefix (BlockTV: blocktv_zap_service,
+# blocktv_nostr_service) so each gets its own manager. Sharing another
+# app's copy (Lightning Piggy's, the Nostr app's) meant running whichever
+# version imported first, and overwriting that app's NWC wallet and
+# callbacks.
 
 import json
+import sys
 import time
 
 from mpos import TaskManager
@@ -31,11 +34,21 @@ from mpos import TaskManager
 # those who have.
 _NostrManager = None
 
+# MicroPythonOS puts an app's directory on sys.path only while it imports
+# the entrypoint and runs the first onCreate/onStart/onResume. The import
+# below can come later (nostr configured in settings, then back), so it
+# looks in the directory this module was loaded from.
+_HERE = __file__.rpartition("/")[0]
+
 
 def _manager():
     global _NostrManager
     if _NostrManager is None:
-        from nostr_service import NostrManager
+        sys.path.insert(0, _HERE)
+        try:
+            from nostr_service import NostrManager
+        finally:
+            sys.path.remove(_HERE)
         _NostrManager = NostrManager
     return _NostrManager
 
@@ -177,7 +190,7 @@ class ZapMonitor:
                 print("BlockTV: invalid zap pubkey: {}".format(e))
                 pubkey_hex = None
             if pubkey_hex:
-                self._configure_relays(mgr, relays)
+                mgr.configure_relays(relays)
                 from nostr.filter import Filter, Filters
                 filters = Filters([Filter(
                     kinds=[ZAP_RECEIPT_KIND],
@@ -201,7 +214,7 @@ class ZapMonitor:
                 print("BlockTV: couldn't configure NWC: {}".format(e))
 
     def stop(self):
-        """Detach callbacks. The shared manager keeps running for other apps."""
+        """Detach callbacks. The manager keeps its relays for the next start()."""
         self._active = False
         if _NostrManager is None:
             return      # never started, so nothing to detach — and no
@@ -214,26 +227,6 @@ class ZapMonitor:
         if self._nwc_active:
             mgr.set_nwc_callbacks()
             self._nwc_active = False
-
-    def _configure_relays(self, mgr, relays):
-        """Add relays for the zap subscription without configuring an
-        identity (no nsec, no relay-list publishing). Falls back to poking
-        manager internals when an older nostr_service.py copy without
-        configure_relays() won the sys.modules slot."""
-        try:
-            mgr.configure_relays(relays)
-        except AttributeError:
-            if isinstance(relays, str):
-                relays = [r.strip() for r in relays.split(",") if r.strip()]
-            added = False
-            for url in relays:
-                if url and url not in mgr._default_relays:
-                    mgr._default_relays.append(url)
-                    added = True
-            mgr._configured_relays = list(mgr._default_relays)
-            if added:
-                mgr._relays_dirty = True
-            mgr._ensure_main_task()
 
     async def _initial_balance_fetch(self, mgr):
         """The manager's poll loop covers steady-state; this covers the

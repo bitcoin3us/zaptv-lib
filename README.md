@@ -30,6 +30,13 @@ library commit it took them from in `zaptv-lib.lock`. Edit the modules
 here, commit, then re-run the sync in each app — never edit the vendored
 copies in place.
 
+All MicroPythonOS apps share one `sys.modules`, so a second app importing
+a module name that another app already imported gets that app's copy,
+whatever its version. Vendor under the app's own prefix: BlockTV's sync
+copies `nostr_service.py` to `blocktv_nostr_service.py` and rewrites the
+imports between vendored modules to match. ClankerTV's two modules
+already carry its name.
+
 ```sh
 # in an app repo, with ../dev-zaptv-lib checked out beside it
 ./tools/sync-lib.sh
